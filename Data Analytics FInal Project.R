@@ -4,14 +4,23 @@
 #  IT 030 Data Analytics | Group 4
 # ============================================================
 
-library(shiny)
-library(shinydashboard)
-library(plotly)
-library(leaflet)
-library(dplyr)
-library(lubridate)
-library(ggplot2)
-library(tidyr)
+# -- Dependency Management --------------------------------------------------
+required_packages <- c("shiny", "shinydashboard", "plotly", "leaflet", 
+                       "dplyr", "lubridate", "ggplot2", "tidyr", "here")
+
+missing_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(missing_packages) > 0) install.packages(missing_packages)
+invisible(lapply(required_packages, library, character.only = TRUE))
+
+# -- Environment Setup ------------------------------------------------------
+# In VS Code, we ensure the working directory matches the script location
+if (interactive() && requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
+  setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+} else if (requireNamespace("here", quietly = TRUE)) {
+  setwd(here::here())
+} else {
+  message("Warning: Using default working directory. Data paths might fail.")
+}
 
 # ── Custom CSS ───────────────────────────────────────────────
 quakeguard_css <- "
@@ -703,8 +712,15 @@ server <- function(input, output, session) {
   
   # ── Load data ──────────────────────────────────────────
   raw <- reactive({
-    df <- read.csv("data/processed/earthquake_combined.csv", stringsAsFactors = FALSE)
-    df$date_time <- ymd_hms(df$date_time, quiet = TRUE)
+    # Use find.package or relative logic, but here we assume standard structure
+    file_path <- here::here("earthquake_combined.csv")
+    if (!file.exists(file_path)) {
+      stop(paste("Critical Error: Data file not found at", file_path))
+    }
+    
+    df <- read.csv(file_path, stringsAsFactors = FALSE)
+    # Using parse_date_time to handle rows missing time components (e.g., 2023-05-12)
+    df$date_time <- parse_date_time(df$date_time, orders = c("ymd HMS", "ymd"), quiet = TRUE)
     df$year      <- year(df$date_time)
     df <- df %>%
       mutate(
