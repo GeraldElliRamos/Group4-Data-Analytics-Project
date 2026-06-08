@@ -231,9 +231,13 @@ pop_data <- data.frame(
 # ── UI ──────────────────────────────────────────────────────
 ui <- dashboardPage(
   skin = "black",
+  title = "QuakeGuard | Earthquake Vulnerability Dashboard",
   
   dashboardHeader(
-    title = tags$span("QUAKEGUARD"),
+    title = tagList(
+      tags$span(class = "logo-lg", "QUAKEGUARD"),
+      tags$span(class = "logo-mini", "QG")
+    ),
     titleWidth = 220
   ),
   
