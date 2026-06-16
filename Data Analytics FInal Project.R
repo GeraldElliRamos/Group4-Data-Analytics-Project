@@ -1,26 +1,11 @@
-# ============================================================
-#  QuakeGuard – Earthquake Vulnerability Dashboard
-#  Marikina City & San Mateo, Rizal  |  2000-2024
-#  IT 030 Data Analytics | Group 4
-# ============================================================
-
-# -- Dependency Management --------------------------------------------------
-required_packages <- c("shiny", "shinydashboard", "plotly", "leaflet", 
-                       "dplyr", "lubridate", "ggplot2", "tidyr", "here")
-
-missing_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
-if(length(missing_packages) > 0) install.packages(missing_packages)
-invisible(lapply(required_packages, library, character.only = TRUE))
-
-# -- Environment Setup ------------------------------------------------------
-# In VS Code, we ensure the working directory matches the script location
-if (interactive() && requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
-  setwd(dirname(rstudioapi::getSourceEditorContext()$path))
-} else if (requireNamespace("here", quietly = TRUE)) {
-  setwd(here::here())
-} else {
-  message("Warning: Using default working directory. Data paths might fail.")
-}
+library(shiny)
+library(shinydashboard)
+library(plotly)
+library(leaflet)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(tidyr)
 
 # ── Custom CSS ───────────────────────────────────────────────
 quakeguard_css <- "
@@ -219,25 +204,23 @@ east_valley_fault <- data.frame(
   lng = c(121.110, 121.120, 121.130, 121.145, 121.160, 121.175, 121.185, 121.200)
 )
 
-# ── Population data (PSA 2020 Census) ───────────────────────
-pop_data <- data.frame(
-  city       = c("Marikina City", "San Mateo, Rizal", "Quezon City",
-                 "Antipolo City", "Pasig City", "Cainta, Rizal",
-                 "Taytay, Rizal", "Rodriguez (Montalban)"),
-  population = c(512428, 267661, 2960048, 887399, 803159,
-                 362380, 363788, 460286)
-)
+# ── Population data from CSV ────────────────────────────────
+pop_data <- read.csv("C:/Users/Gerald Eli Ramos/Downloads/city_population.csv") %>%
+  select(city, population) %>%
+  mutate(city = case_when(
+    city == "San Mateo Rizal" ~ "San Mateo, Rizal",
+    city == "Cainta Rizal" ~ "Cainta, Rizal",
+    city == "Taytay Rizal" ~ "Taytay, Rizal",
+    city == "Rodriguez Montalban" ~ "Rodriguez (Montalban)",
+    TRUE ~ city
+  ))
 
 # ── UI ──────────────────────────────────────────────────────
 ui <- dashboardPage(
   skin = "black",
-  title = "QuakeGuard | Earthquake Vulnerability Dashboard",
   
   dashboardHeader(
-    title = tagList(
-      tags$span(class = "logo-lg", "QUAKEGUARD"),
-      tags$span(class = "logo-mini", "QG")
-    ),
+    title = tags$span("QUAKEGUARD"),
     titleWidth = 220
   ),
   
@@ -716,15 +699,8 @@ server <- function(input, output, session) {
   
   # ── Load data ──────────────────────────────────────────
   raw <- reactive({
-    # Use find.package or relative logic, but here we assume standard structure
-    file_path <- here::here("earthquake_combined.csv")
-    if (!file.exists(file_path)) {
-      stop(paste("Critical Error: Data file not found at", file_path))
-    }
-    
-    df <- read.csv(file_path, stringsAsFactors = FALSE)
-    # Using parse_date_time to handle rows missing time components (e.g., 2023-05-12)
-    df$date_time <- parse_date_time(df$date_time, orders = c("ymd HMS", "ymd"), quiet = TRUE)
+    df <- read.csv("data/processed/earthquake_combined.csv", stringsAsFactors = FALSE)
+    df$date_time <- ymd_hms(df$date_time, quiet = TRUE)
     df$year      <- year(df$date_time)
     df <- df %>%
       mutate(
@@ -1049,16 +1025,24 @@ server <- function(input, output, session) {
   
   # ── Population exposure value boxes ───────────────────
   output$vbox_pop_marikina <- renderValueBox({
-    valueBox("512,428", "Marikina City Population At Risk", icon = icon("people-group"), color = "red")
+    pop <- pop_data %>% filter(city == "Marikina City") %>% pull(population)
+    valueBox(format(pop, big.mark = ","), "Marikina City Population At Risk", 
+             icon = icon("people-group"), color = "red")
   })
   output$vbox_pop_sanmateo <- renderValueBox({
-    valueBox("267,661", "San Mateo Population At Risk", icon = icon("people-group"), color = "orange")
+    pop <- pop_data %>% filter(city == "San Mateo, Rizal") %>% pull(population)
+    valueBox(format(pop, big.mark = ","), "San Mateo Population At Risk", 
+             icon = icon("people-group"), color = "orange")
   })
   output$vbox_pop_qc <- renderValueBox({
-    valueBox("2.96M", "Quezon City Population At Risk", icon = icon("people-group"), color = "blue")
+    pop <- pop_data %>% filter(city == "Quezon City") %>% pull(population)
+    valueBox(format(pop, big.mark = ","), "Quezon City Population At Risk", 
+             icon = icon("people-group"), color = "blue")
   })
   output$vbox_pop_total <- renderValueBox({
-    valueBox("5.6M+", "Total Population in Impact Zone", icon = icon("earth-asia"), color = "teal")
+    total <- sum(pop_data$population, na.rm = TRUE)
+    valueBox(format(total, big.mark = ","), "Total Population in Impact Zone", 
+             icon = icon("earth-asia"), color = "teal")
   })
   
   # ── Population exposure chart ──────────────────────────
